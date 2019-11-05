@@ -28,7 +28,7 @@
 
 <aliases>
   <alias
-   match="^(?<which>a|m)b?rep (?<num>[\d]{1,5})?(?<id>[\d]{6,}|(\d+\.)?\w+?( worn)?)?( (?<chan>[\w ]+))?$"
+   match="^(?<which>a|m)?b?rep (?<num>\d+)?(?<item>(\d+\.)?\w+)?((?<worn> worn))?( (?<chan>[\w ]+))?$"
    enabled="y"
    regexp="y"
    script="barter_report"
@@ -91,7 +91,7 @@
 	</trigger>
 	<trigger 
 	enabled="n"
-	match="^\| Weapon Type: (?<weapon>[^\s]+)\s+Average Dam :\s+(?<damage>\d+)\s+\|$"
+	match="^\| Weapon Type: (?<weapon>[^\s]+)\s+Average Dam :\s+(?<damage>\d+)\s+(\((?<plusdmg>\+\d+)\))?\s+\|$"
 	omit_from_output="n"
 	sequence="100"
 	regexp="y"
@@ -524,13 +524,19 @@ function barter_help()
 end
 
 function barter_report(name, line, args)
-	local what = args.num..args.id
-	if tonumber(what) and args.which == "m" then
-		which = "lbid"
-	elseif tonumber(what) and args.which == "a" then
-		which = "bid"
-	else
+	-- which, num, item, worn, chan
+	local what = args.num..args.item..args.worn
+	if not tonumber(what) then -- item name
 		which = "identify"
+	elseif #args.num > 6 then
+		which = "identify"
+	elseif args.which == "a" and #what < 6 then
+		which = "bid"
+	elseif args.which == "m" and #what < 6 then
+		which = "lbid"
+	else
+		ColourNote("white", "", "Unable to determine what you want to report on.")
+		return
 	end
 	if args.chan ~= "" then
 		chan = args.chan
@@ -543,7 +549,7 @@ function barter_report(name, line, args)
 	sol = 0
 	EnableTriggerGroup("item", true)
 	item.num = what
-	SendNoEcho(which.." "..what)
+	Send(which.." "..what)
 	SendNoEcho("echo {end_brep}")
 end
 
@@ -579,6 +585,7 @@ end
 function set_weapon(name, line, args)
 	item.weapon = args.weapon
 	item.damage = args.damage
+	item.plusdmg = args.plusdmg
 end
 
 function set_flags(name, line, args)
@@ -661,10 +668,11 @@ function report_barter()
 		str = str..item.id
 	end
 	str = str.."@x008] "..nm
+
 	if item.type == "Armor" or item.type == "Light" or item.type == "Boat" then
 		str = str.." @x008[@wLvl @W"..item.level.."@x177 "..string_capitalize(item.wear).."@x008] "
 	elseif item.type == "Weapon" then
-		str = str.." @x008[@wLvl @W"..item.level.."@x177 "..string_capitalize(item.weapon).."@x008|@W"..item.damage.." @x177Dmg@x008] "
+		str = str.." @x008[@wLvl @W"..item.level.."@x177 "..string_capitalize(item.weapon).."@x008|@W"..item.damage..(item.plusdmg and " @w"..item.plusdmg).." @x177Dmg@x008] "
 	elseif item.type == "Portal" then
 		str = str.." @x008[@wLvl @W"..item.level.."@x177 "..string_capitalize(item.type).."@w to @x165"..trim(item.destination).."@x008] "
 	elseif item.type == "Drink" then
